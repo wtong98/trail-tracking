@@ -6,13 +6,10 @@ date: March 6, 2023
 """
 
 # <codecell>
-import numpy as np
-from torch.utils.data import Dataset
-
 import jax
 from jax import random, numpy as jnp
 from flax import linen as nn
-from flax.training import train_state
+from flax.training import train_state, early_stopping
 import optax
 
 class MlpModel:
@@ -21,23 +18,38 @@ class MlpModel:
         self.model = MLP()
         self.state = create_train_state(self.model, k)
 
-    def fit(self, X, y, X_test=None, y_test=None, train_iters=10_000):
+    def fit(self, X, y, X_test=None, y_test=None, max_iters=10_000, patience=3):
         batch = (X, y)
+        stop = early_stopping.EarlyStopping(patience=patience)
 
-        for i in range(train_iters):
+        for i in range(max_iters):
             self.state = train_step(self.state, batch)
 
-            if i % 100 == 0:
-                train_r2 = compute_r2(self.state, (X, y))
-                if X_test and y_test:
+            if i % 50 == 0:
+                train_r2 = compute_r2(self.state, batch)
+                if type(X_test) != type(None) and type(y_test) != type(None):
                     test_r2 = compute_r2(self.state, (X_test, y_test))
+
+                    # TODO: move to validation mouse
+                    _, stop = stop.update(-test_r2)
+                    if stop.should_stop:
+                        print('info: stopping early')
+                        break
                 else:
                     test_r2 = 0
 
+
                 print(f'Iter {i}: train_r2 = {train_r2:.4f}   test_r2 = {test_r2:.4f}')
 
+    def reset(self):
+        self.key, k = random.split(self.key, 2)
+        self.state = create_train_state(self.model, k)
+        
     def predict(self, X):
         return self.model.apply(self.state.params, X)
+    
+    def score(self, X, y):
+        return compute_r2(self.state, (X, y))
 
 
 class MLP(nn.Module):
@@ -61,6 +73,7 @@ def compute_mse(state, batch):
 
 @jax.jit
 def compute_r2(state, batch):
+    _, y = batch
     mse = compute_mse(state, batch)
     y_var = jnp.mean((y - jnp.mean(y)) ** 2)
     return 1 - mse / y_var
