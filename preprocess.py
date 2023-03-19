@@ -7,6 +7,13 @@ from collections import defaultdict
 from pathlib import Path
 import re
 
+import jax
+from jax import random, numpy as jnp
+from flax import linen as nn
+from flax.training import train_state
+import optax
+
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -41,6 +48,7 @@ for path in data_dir.iterdir():
     data[mouse_id][idx] = raw_arr[:,3:]  # brute-force nan drop
 
 data = pd.DataFrame(data).T
+pd.to_pickle(data, 'data/df.pkl')
 
 # <codecell>
 # TODO: align regressors more carefully
@@ -91,32 +99,79 @@ X_test, y_test = segment(data.mouse[2], data.trail[2])
 model.score(X_test, y_test)
 
 # <codecell>
+class MLP(nn.Module):
+    @nn.compact
+    def __call__(self, x):
+        x = nn.Dense(512)(x)
+        x = nn.relu(x)
+        x = nn.Dense(512)(x)
+        x = nn.relu(x)
+        x = nn.Dense(512)(x)
+        x = nn.relu(x)
+        x = nn.Dense(2)(x)
+        return x
 
-t = data.trail[1]
-m = data.mouse[1]
+key, k1, k2 = random.split(random.PRNGKey(42), 3)
 
-t[1,:][t[1,:] > 35] = 0
-# plt.plot(t[0,:])
-plt.plot(m[1,:])
-plt.plot(t[1,:])
+model = MLP()
+params = model.init(k1, jnp.empty((1, 1200)))
 
-plt.xlim((1500, 2000))
+X, y = segment(data.mouse[0], data.trail[0])
+X_, y_ = segment(data.mouse[1], data.trail[1])
 
+X = np.concatenate((X, X_), axis=0)
+y = np.concatenate((y, y_), axis=0)
 
-# <codecell>
+X_test, y_test = segment(data.mouse[2], data.trail[2])
 
-start = 6000
-length = 509
-time_idx = np.arange(start, start + length)
-mouse_data = np.load('data/Test_mus_1.np.npy')
-mouse_data = mouse_data[:, 3:][:,time_idx]
+out = model.apply(params, X)
+jnp.mean((out - y) ** 2)
 
-trail_data = np.load('data/Trail_1.np.npy')
-trail_data[:, 3:][:,time_idx]
+# %%
+@jax.jit
+def compute_mse(state, batch):
+    X, y = batch
+    preds = state.apply_fn(state.params, X)
+    loss = jnp.mean((preds - y) ** 2)
+    return loss
 
-plt.plot(trail_data[0], trail_data[1])
-plt.plot(mouse_data[0], mouse_data[1])
+@jax.jit
+def compute_r2(state, batch):
+    mse = compute_mse(state, batch)
+    y_var = jnp.mean((y - jnp.mean(y)) ** 2)
+    return 1 - mse / y_var
 
-plt.ylim((0, 35))
-plt.xlim((400, 600))
+def create_train_state(model, rng, lr=1e-4):
+    params = model.init(rng, jnp.empty((1, 300 * 4)))
+
+    return train_state.TrainState.create(
+        apply_fn=model.apply,
+        params=params,
+        tx=optax.adam(lr)
+    )
+
+@jax.jit
+def train_step(state, batch):
+    X, y = batch
+
+    def loss_fn(params):
+        preds = state.apply_fn(params, X)
+        loss = jnp.mean((preds - y) ** 2)
+        return loss
+    
+    grad_fn = jax.grad(loss_fn)
+    grads = grad_fn(state.params)
+    state = state.apply_gradients(grads=grads)
+    return state
+
+state = create_train_state(model, k2)
+
+for i in range(10000):
+    state = train_step(state, (X, y))
+
+    if i % 100 == 0:
+        train_r2 = compute_r2(state, (X, y))
+        test_r2 = compute_r2(state, (X_test, y_test))
+        print(f'Iter {i}: train_r2 = {train_r2:.4f}   test_r2 = {test_r2:.4f}')
+
 # %%
