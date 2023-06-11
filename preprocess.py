@@ -15,8 +15,49 @@ from sklearn.linear_model import *
 
 sampling_rate = 30
 
-def preprocess(data_dir=Path('data/')):
-    """Mouse coordinates go snout -> r ear -> l ear -> shoulder -> tail base"""
+def preprocess_box(data_dir='data/box'):
+    """Mouse coordinates are: 
+        snout -> r ear -> l ear -> shoulder -> tail base
+        -> ll box -> lr box -> ul box -> ur box
+    """
+
+    data_dir = Path(data_dir)
+    mouse_regex = 'Mus_\d+_box.npy'
+    num_regex = '\d+'
+
+    data = defaultdict(dict)
+    for path in data_dir.iterdir():
+        if re.search(mouse_regex, str(path)):
+            num_match = re.search(num_regex, str(path))
+            mouse_id = num_match[0]
+            raw_arr = np.load(path)
+
+            raw_arr[11,:][raw_arr[11,:] > 40] = 40   # clamp nonsense values in trail y coordinates
+
+            # TODO: test, and filter NaN's
+            raw_trail = drop_nan_col(raw_arr[10:12,:])
+            raw_mouse = drop_nan_col(np.concatenate((raw_arr[:10,:], raw_arr[12:,:]), axis=0))
+
+            data[mouse_id]['trail'] = raw_trail
+            data[mouse_id]['mouse'] = raw_mouse
+        else:
+            print(f'warn: skipping {path}')
+            continue
+
+    data = pd.DataFrame(data).T
+    pd.to_pickle(data, 'data/df.pkl')
+    return data
+
+
+def drop_nan_col(x):
+    return x[:, ~np.any(np.isnan(x), axis=0)]
+
+
+def preprocess_sep(data_dir=Path('data/')):
+    """Mouse coordinates are: 
+        snout -> r ear -> l ear -> shoulder -> tail base
+    """
+
     mouse_regex = 'Test_mus_\d+.*'
     trail_regex = 'Trail_\d+.*'
     num_regex = '\d+'
@@ -130,6 +171,19 @@ def segment_old(mouse, trail, window=300, stack=True):
         y = np.stack(y).reshape(len(exs), -1)
     
     return X, y
+
+# <codecell>
+data = np.load('data/box/Mus_1_box.npy')
+pt = data[10:18,5045]  # coordinates are mouse (10) x trail (2) x box (8)
+
+xs = pt[::2]
+ys = pt[1::2]
+
+plt.scatter(xs, ys)
+
+# plt.scatter(data[10,:], data[11,:])
+# data[10,-100:]
+# <codecell>
 
 
 if __name__ == '__main__':
