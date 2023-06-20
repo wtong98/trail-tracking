@@ -87,17 +87,12 @@ def preprocess_sep(data_dir=Path('data/')):
     pd.to_pickle(data, 'data/df.pkl')
 
 
-def segment(mouse, trail, track_delay=1, srate=3, window=5):
+def segment(mouse, trail, srate=3, window=5):
     skip = sampling_rate // srate
-    delay = int(track_delay * sampling_rate)
-    print('DELAY', delay)  # TODO: switch to coordinates closest to the mouse snout <-- STOPPED HERE
+    mouse = mouse[:,::skip]
 
-    max_size = min(trail.shape[1], mouse.shape[1])  #TODO: wrap in bounding box
-    
-    mouse = mouse[:,:(max_size-delay):skip]
-    trail = trail[:,delay:max_size:skip]
-    print(trail.shape)
-    print(trail[:,200:205])
+    mouse, box = mouse[:10], mouse[10:]
+    perp_dists, t_dists = _get_perp_dists(mouse, box, trail)
 
     exs = []
     for i in range(mouse.shape[1] - window):
@@ -108,15 +103,32 @@ def segment(mouse, trail, track_delay=1, srate=3, window=5):
         trans = _make_trans(m)
 
         xs = trans(mouse[:, start_idx:stop_idx])
-        ts = trans(trail[:, start_idx:stop_idx])
         y = trans(mouse[:2, [stop_idx]])
+        ts = trans(t_dists[:, start_idx:stop_idx])
 
-        xs = np.concatenate((xs, ts), axis=0)
+        xs = np.concatenate((xs, perp_dists[:,start_idx:stop_idx], ts, box[:,start_idx:stop_idx]))
         exs.append((xs, y))
 
     X, y = zip(*exs)
-    
     return np.array(X), np.array(y)
+
+
+def _get_perp_dists(mouse, box, trail):
+    snout = mouse[:2,:]
+    box_ll = box[:2,:]
+    box_ur = box[-2:,:]
+
+    r_dists, u_dists = np.abs(box_ur - snout)
+    l_dists, d_dists = np.abs(box_ll - snout)
+
+    m_norm = np.linalg.norm(snout, axis=0, keepdims=True)
+    t_norm = np.linalg.norm(trail, axis=0, keepdims=True)
+    t_dists = np.sqrt(m_norm.T**2 - 2 * snout.T @ trail + t_norm**2)
+
+    t_idx = np.argmin(t_dists, axis=1)
+    t_dists = trail[:,t_idx] - snout
+    most_dists = np.stack((r_dists, u_dists, l_dists, d_dists))
+    return most_dists, t_dists
 
 
 def _make_trans(m):
@@ -130,7 +142,8 @@ def _make_trans(m):
 
         if dir_[1] > 0:
             # theta = -theta - np.sign(dir_[0]) * (np.pi / 2)
-            theta = np.sign(dir_[0]) * (theta - np.pi)
+            # theta = np.sign(dir_[0]) * (theta - np.pi)
+            theta -= -np.pi
 
     def trans(x):
         rot_mat = np.array([
@@ -143,70 +156,56 @@ def _make_trans(m):
         origin = np.tile(m[:2], n_reps)
         return rot_mat @ (x - origin.reshape(-1, 1))
     
-    # return lambda x: x
-    return trans
-
-# TODO: align regressors more carefully
-def segment_old(mouse, trail, window=300, stack=True):
-    snout = mouse[:2,:]
-    snout = snout[:,:trail.shape[1]]
-
-    exs = []
-    for i in range(snout.shape[1] - window):
-        start_idx = i
-        stop_idx = i + window
-        xs = snout[:, start_idx:stop_idx]
-        ts = trail[:, start_idx:stop_idx]
-        y = snout[:, stop_idx].reshape(-1, 1)
-
-        curr_pos = xs[:,-1].reshape(-1, 1)
-
-        xs = np.concatenate((xs, ts), axis=1)
-        exs.append((xs - curr_pos, y - curr_pos))
-
-    X, y = zip(*exs)
-
-    if stack:
-        X = np.stack(X).reshape(len(exs), -1)
-        y = np.stack(y).reshape(len(exs), -1)
-    
-    return X, y
-
-# <codecell>
-data = np.load('data/box/Mus_1_box.npy')
-pt = data[10:18,5045]  # coordinates are mouse (10) x trail (2) x box (8)
-
-xs = pt[::2]
-ys = pt[1::2]
-
-plt.scatter(xs, ys)
-
-# plt.scatter(data[10,:], data[11,:])
-# data[10,-100:]
-# <codecell>
-
+    return lambda x: x
+    # return trans
 
 if __name__ == '__main__':
     data = pd.read_pickle('data/df.pkl')
     X, y = segment(data.mouse[0], data.trail[0])
-    idx = 290
+    idx = 509  
+    # TODO: check mouse will sometimes exceed bounds of box
+    # TODO: think about way to encode direction
 
     mx = X[idx, 0, :]
     my = X[idx, 1, :]
 
-    dx = X[idx,0,-1] - X[idx,-4,-1]
-    dy = X[idx,1,-1] - X[idx,-3,-1]
+    px = mx[-1]
+    py = my[-1]
+
+    r_dist, u_dist, l_dist, d_dist, tx_dist, ty_dist = X[idx, 10:16,-1]
+    llx, lly, lrx, lry, ulx, uly, urx, ury = X[idx, 16:,-1]
+    print(llx)
+
+    print('WIDTH', r_dist + l_dist)
+    print('HEIGHT', u_dist + d_dist)
+
+    dx = X[idx,0,-1] - X[idx,-10,-1]
+    dy = X[idx,1,-1] - X[idx,-9,-1]
 
     tx = X[idx, -2, :]
     ty = X[idx, -1, :]
 
     plt.plot(mx, my)
-    plt.plot(tx, ty)
 
-    plt.arrow(0, 0, y[idx, 0, 0], y[idx, 1, 0], head_width=0.5, head_length=0.5, color='red')
-    plt.arrow(0, 0, dx, dy, color='magenta')
+    plt.arrow(px, py, y[idx, 0, 0]-px, y[idx, 1, 0]-py, head_width=0.5, head_length=0.5, color='red')
+    plt.arrow(px, py, r_dist, 0, color='gray')
+    plt.arrow(px, py, -l_dist, 0, color='gray')
+    plt.arrow(px, py, 0, u_dist, color='gray')
+    plt.arrow(px, py, 0, -d_dist, color='gray')
+    plt.arrow(px, py, tx_dist, ty_dist, color='orange')
 
-    plt.arrow(0, 0, 0, 1)
+    plt.scatter([llx, lrx, ulx, urx], [lly, lry, uly, ury])
+
+    # circ = plt.Circle((px, py), t_dist, fill=False, clip_on=True)
+    # plt.gca().add_patch(circ)
+
+
+    plt.scatter(data.trail[0][0], data.trail[0][1], s=0.1)
+    plt.xlim((llx, lrx))
+    plt.ylim((lly, uly))
+    # plt.arrow(px, py, dx, dy, color='magenta')
+
+    # plt.arrow(0, 0, 0, 1)
     # plt.xlim((-20, 20))
     # plt.ylim((-20, 20))
 
@@ -226,3 +225,4 @@ if __name__ == '__main__':
 
     # X_test, y_test = segment(data.mouse[2], data.trail[2])
     # model.score(X_test, y_test)
+# %%
