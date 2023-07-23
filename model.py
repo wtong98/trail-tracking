@@ -6,14 +6,18 @@ date: March 6, 2023
 """
 
 # <codecell>
-import jax
-from jax import random, numpy as jnp
 from flax import linen as nn
 from flax.training import train_state, early_stopping
+import jax
+from jax import random, numpy as jnp
+import numpy as np
 import optax
 
 class MlpModel:
-    def __init__(self, rng_seed=1130) -> None:
+    def __init__(self, rng_seed=None) -> None:
+        if rng_seed is None:
+            rng_seed = np.random.randint(1, np.iinfo(np.int32).max)
+
         self.key, k = random.split(random.PRNGKey(rng_seed), 2)
         self.model = MLP()
         self.state = create_train_state(self.model, k)
@@ -79,7 +83,7 @@ def compute_r2(state, batch):
     return 1 - mse / y_var
 
 def create_train_state(model, rng, lr=1e-4):
-    params = model.init(rng, jnp.empty((1, 300 * 4)))
+    params = jax.jit(model.init)(rng, jnp.empty((1, 100)))  # TODO: make param
 
     return train_state.TrainState.create(
         apply_fn=model.apply,
@@ -101,3 +105,5 @@ def train_step(state, batch):
     state = state.apply_gradients(grads=grads)
     return state
 
+
+# %%

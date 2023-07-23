@@ -18,13 +18,16 @@ from preprocess import segment
 
 data = pd.read_pickle('data/df.pkl')
 
-X, y = segment(data.mouse[0], data.trail[0])
-X_, y_ = segment(data.mouse[1], data.trail[1])
+train_idxs = np.arange(4)
+test_idx = 4
 
-X = np.concatenate((X, X_), axis=0)
-y = np.concatenate((y, y_), axis=0)
+segs = [segment(data.mouse.iloc[i], data.trail[i], flatten=True) for i in train_idxs]
+train_Xs, train_ys = zip(*segs)
 
-X_test, y_test = segment(data.mouse[2], data.trail[2])
+X = np.concatenate(train_Xs)
+y = np.concatenate(train_ys)
+
+X_test, y_test = segment(data.mouse[test_idx], data.trail[test_idx], flatten=True)
 
 # <codecell>
 @dataclass
@@ -36,6 +39,7 @@ class Case:
     args: dict = field(default_factory=dict)
 
 cases = [
+    #TODO: should scale models <-- STOPPED HERE
     Case(name='Linear', model=LinearRegression()),
     Case(name='Lasso', model=Lasso(alpha=0.1)),
     Case(name='MLP', model=MlpModel(), args={'X_test': X_test, 'y_test': y_test}),
@@ -58,7 +62,7 @@ g.legend().set_title('')
 g.set_xlabel('')
 g.set_ylabel(r'$R^2$')
 g.set_title(r'$R^2$ across 3 models on 1D data')
-plt.savefig('fig/1d_comparison.png')
+# plt.savefig('fig/1d_comparison.png')
 
 # <codecell>
 
