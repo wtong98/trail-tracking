@@ -72,7 +72,48 @@ g.set_ylabel(r'$R^2$')
 g.set_title(r'$R^2$ across 3 models on 1D data')
 plt.savefig('fig/1d_feats_comparison.png')
 
-# TODO: animate box and predictions <-- STOPPED HERE
+# <codecell>
+plot_idx = 4
+model = cases[0].model
+
+X_plot, y_plot = segment(data.mouse[plot_idx], data.trail[plot_idx], flatten=True)
+X_plot_sc = scalar_x.transform(X_plot)
+y_plot_pred_sc = model.predict(X_plot_sc)
+y_plot_pred = scalar_y.inverse_transform(y_plot_pred_sc)
+
+X_plot = X_plot.reshape(X_plot.shape[0], 20, -1)
+
+# TODO: correct orientation and animate <-- STOPPED HERE
+t_idx = 463
+X, y, y_pred = X_plot[t_idx], y_plot[t_idx], y_plot_pred[t_idx]
+
+mx = X[0, :]
+my = X[1, :]
+
+px = mx[-1]
+py = my[-1]
+
+rx, ry, ux, uy, lx, ly, dwx, dwy, tx_dist, ty_dist = X[10:, -1]
+# llx, lly, lrx, lry, ulx, uly, urx, ury = X[idx, 16:,-1]
+# print(llx)
+
+dx = X[0,-1] - X[8,-1]
+dy = X[1,-1] - X[9,-1]
+
+plt.plot(mx, my)
+
+plt.arrow(px, py, y[0]-px, y[1]-py, head_width=0.5, head_length=0.5, color='red')
+plt.arrow(px, py, y_pred[0]-px, y_pred[1]-py, head_width=0.5, head_length=0.5, color='purple')
+
+plt.arrow(px, py, rx, ry, color='gray', alpha=0.5)
+plt.arrow(px, py, ux, uy, color='gray', alpha=0.5)
+plt.arrow(px, py, lx, ly, color='gray', alpha=0.5)
+plt.arrow(px, py, dwx, dwy, color='gray', alpha=0.5)
+
+plt.arrow(px, py, tx_dist, ty_dist, color='orange')
+
+
+
 # <codecell>
 
 # TODO: cleanup and animate with bounding boxes
@@ -137,45 +178,3 @@ def animate(model, X_test, mouse, trail, n_preds=250, start_idx=0, save_path='an
 animate(cases[0].model, X_test, data.mouse[2], data.trail[2], n_preds=300, start_idx=3000, save_path='fig/linear_traj.mp4')
 animate(cases[1].model, X_test, data.mouse[2], data.trail[2], n_preds=300, start_idx=3000, save_path='fig/lasso_traj.mp4')
 animate(cases[2].model, X_test, data.mouse[2], data.trail[2], n_preds=300, start_idx=3000, save_path='fig/mlp_traj.mp4')
-
-
-# <codecell>
-start_idx=3000
-n_preds=1
-# model = LinearRegression()
-# model.fit(X, y)
-
-model = cases[2].model
-
-xs = X_test[start_idx,:]
-all_xs = [xs]
-
-for i in range(n_preds):
-    ys = model.predict(xs.reshape(1, -1)).flatten()
-    mx, tx, my, ty = np.split(np.copy(xs), 4)
-
-    mxn, txn, myn, tyn = np.split(X_test[start_idx+i+1],4)
-
-    mx[:-1] = mx[1:]
-    mx[-1] = ys[0]
-    mx = mx - ys[0]
-
-    my[:-1] = my[1:]
-    my[-1] = ys[1]
-    my = my - ys[1]
-
-    dtx = txn[-1] - txn[-2]
-    dty = tyn[-1] - tyn[-2]
-
-    tx[:-1] = tx[1:]
-    tx[-1] += dtx
-
-    ty[:-1] = ty[1:]
-    ty[-1] += dty
-
-    plt.plot(mx, my)
-    plt.plot(tx, ty)
-    plt.ylim((-15, 15))
-
-    xs = np.concatenate((mx, tx, my, ty))
-    all_xs.append(xs)

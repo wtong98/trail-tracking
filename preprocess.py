@@ -203,7 +203,6 @@ if __name__ == '__main__':
     # plt.arrow(px, py, 0, u_dist, color='gray')
     # plt.arrow(px, py, 0, -d_dist, color='gray')
 
-    # TODO: not all of the directions ended correctly v
     plt.arrow(px, py, rx, ry, color='gray', alpha=0.5)
     plt.arrow(px, py, ux, uy, color='gray', alpha=0.5)
     plt.arrow(px, py, lx, ly, color='gray', alpha=0.5)
