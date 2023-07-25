@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from sklearn.linear_model import LinearRegression, Lasso
+from sklearn.preprocessing import StandardScaler
 
 from model import MlpModel
 from preprocess import segment
@@ -27,7 +28,15 @@ train_Xs, train_ys = zip(*segs)
 X = np.concatenate(train_Xs)
 y = np.concatenate(train_ys)
 
+scalar_x = StandardScaler().fit(X)
+scalar_y = StandardScaler().fit(y)
+
+X = scalar_x.transform(X)
+y = scalar_y.transform(y)
+
 X_test, y_test = segment(data.mouse[test_idx], data.trail[test_idx], flatten=True)
+X_test = scalar_x.transform(X_test)
+y_test = scalar_y.transform(y_test)
 
 # <codecell>
 @dataclass
@@ -39,10 +48,9 @@ class Case:
     args: dict = field(default_factory=dict)
 
 cases = [
-    #TODO: should scale models <-- STOPPED HERE
     Case(name='Linear', model=LinearRegression()),
     Case(name='Lasso', model=Lasso(alpha=0.1)),
-    Case(name='MLP', model=MlpModel(), args={'X_test': X_test, 'y_test': y_test}),
+    # Case(name='MLP', model=MlpModel(), args={'X_test': X_test, 'y_test': y_test}),
 ]
 
 for case in cases:
@@ -62,8 +70,9 @@ g.legend().set_title('')
 g.set_xlabel('')
 g.set_ylabel(r'$R^2$')
 g.set_title(r'$R^2$ across 3 models on 1D data')
-# plt.savefig('fig/1d_comparison.png')
+plt.savefig('fig/1d_feats_comparison.png')
 
+# TODO: animate box and predictions <-- STOPPED HERE
 # <codecell>
 
 # TODO: cleanup and animate with bounding boxes
