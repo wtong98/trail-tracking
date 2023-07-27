@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import numpy as np
 import pandas as pd
+from scipy.linalg import block_diag
 import seaborn as sns
 from sklearn.linear_model import LinearRegression, Lasso
 from sklearn.preprocessing import StandardScaler
@@ -83,36 +84,58 @@ y_plot_pred = scalar_y.inverse_transform(y_plot_pred_sc)
 
 X_plot = X_plot.reshape(X_plot.shape[0], 20, -1)
 
-# TODO: correct orientation and animate <-- STOPPED HERE
-t_idx = 463
-X, y, y_pred = X_plot[t_idx], y_plot[t_idx], y_plot_pred[t_idx]
+t_idx = 505
 
-mx = X[0, :]
-my = X[1, :]
+def plot_frame(t_idx):
+    plt.clf()
+    X, y, y_pred = X_plot[t_idx], y_plot[t_idx], y_plot_pred[t_idx]
 
-px = mx[-1]
-py = my[-1]
+    rx, ry, ux, uy, lx, ly, dwx, dwy, tx_dist, ty_dist = X[10:, -1]
 
-rx, ry, ux, uy, lx, ly, dwx, dwy, tx_dist, ty_dist = X[10:, -1]
-# llx, lly, lrx, lry, ulx, uly, urx, ury = X[idx, 16:,-1]
-# print(llx)
+    if ux == uy == 0:
+        theta = 0
+    else:
+        theta = np.arctan(ux / uy)
 
-dx = X[0,-1] - X[8,-1]
-dy = X[1,-1] - X[9,-1]
+    if uy < 0:
+        theta += np.pi
 
-plt.plot(mx, my)
+    rot_mat = np.array([
+        [np.cos(theta), -np.sin(theta)],
+        [np.sin(theta), np.cos(theta)]
+    ])
 
-plt.arrow(px, py, y[0]-px, y[1]-py, head_width=0.5, head_length=0.5, color='red')
-plt.arrow(px, py, y_pred[0]-px, y_pred[1]-py, head_width=0.5, head_length=0.5, color='purple')
-
-plt.arrow(px, py, rx, ry, color='gray', alpha=0.5)
-plt.arrow(px, py, ux, uy, color='gray', alpha=0.5)
-plt.arrow(px, py, lx, ly, color='gray', alpha=0.5)
-plt.arrow(px, py, dwx, dwy, color='gray', alpha=0.5)
-
-plt.arrow(px, py, tx_dist, ty_dist, color='orange')
+    rot_mat_block = block_diag(*(10 * [rot_mat]))
+    X = rot_mat_block @ X
+    y = (rot_mat @ y.reshape(-1, 1)).flatten()
+    y_pred = (rot_mat @ y_pred.reshape(-1, 1)).flatten()
 
 
+    mx = X[0, :]
+    my = X[1, :]
+
+    px = mx[-1]
+    py = my[-1]
+
+    rx, ry, ux, uy, lx, ly, dwx, dwy, tx_dist, ty_dist = X[10:, -1]
+
+    plt.plot(mx, my)
+
+    plt.arrow(px, py, y[0]-px, y[1]-py, head_width=0.5, head_length=0.5, color='red')
+    plt.arrow(px, py, y_pred[0]-px, y_pred[1]-py, head_width=0.5, head_length=0.5, color='purple')
+
+    plt.arrow(px, py, rx, ry, color='gray', alpha=0.5)
+    plt.arrow(px, py, ux, uy, color='gray', alpha=0.5)
+    plt.arrow(px, py, lx, ly, color='gray', alpha=0.5)
+    plt.arrow(px, py, dwx, dwy, color='gray', alpha=0.5)
+
+    plt.arrow(px, py, tx_dist, ty_dist, color='orange')
+    plt.xticks([])
+    plt.yticks([])
+
+
+ani = FuncAnimation(plt.gcf(), plot_frame, np.arange(240, 721), interval=330)
+ani.save('fig/lasso_feats_traj.mp4')
 
 # <codecell>
 

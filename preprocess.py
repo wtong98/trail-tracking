@@ -155,9 +155,7 @@ def _make_trans(m):
         theta = np.arctan(dir_[0] / dir_[1])
 
         if dir_[1] > 0:
-            # theta = -theta - np.sign(dir_[0]) * (np.pi / 2)
-            # theta = np.sign(dir_[0]) * (theta - np.pi)
-            theta -= -np.pi
+            theta += np.pi
 
     def trans(x):
         rot_mat = np.array([
@@ -178,7 +176,7 @@ def _make_trans(m):
 if __name__ == '__main__':
     data = pd.read_pickle('data/df.pkl')
     X, y = segment(data.mouse[0], data.trail[0])
-    idx = 547  
+    idx = 565  
     # TODO: check mouse will sometimes exceed bounds of box
     # TODO: ready for predictions <-- STOPPED HERE
 
