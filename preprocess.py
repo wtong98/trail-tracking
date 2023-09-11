@@ -15,14 +15,14 @@ from sklearn.linear_model import *
 
 sampling_rate = 30
 
-def preprocess_box(data_dir='data/box'):
+def preprocess_box(data_dir='data/wide_trails'):
     """Mouse coordinates are: 
         snout -> r ear -> l ear -> shoulder -> tail base
         -> ll box -> lr box -> ul box -> ur box
     """
 
     data_dir = Path(data_dir)
-    mouse_regex = 'Mus_\d+_box.npy'
+    mouse_regex = 'Mus_w\d+.npy'
     num_regex = '\d+'
 
     data = defaultdict(dict)
@@ -176,9 +176,8 @@ def _make_trans(m):
 if __name__ == '__main__':
     data = pd.read_pickle('data/df.pkl')
     X, y = segment(data.mouse[0], data.trail[0])
-    idx = 565  
+    idx = 113
     # TODO: check mouse will sometimes exceed bounds of box
-    # TODO: ready for predictions <-- STOPPED HERE
 
     mx = X[idx, 0, :]
     my = X[idx, 1, :]

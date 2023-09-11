@@ -20,8 +20,8 @@ from preprocess import segment
 
 data = pd.read_pickle('data/df.pkl')
 
-train_idxs = np.arange(4)
-test_idx = 4
+train_idxs = np.arange(len(data) - 1)
+test_idx = len(data) - 1
 
 segs = [segment(data.mouse.iloc[i], data.trail[i], flatten=True) for i in train_idxs]
 train_Xs, train_ys = zip(*segs)
@@ -71,11 +71,11 @@ g.legend().set_title('')
 g.set_xlabel('')
 g.set_ylabel(r'$R^2$')
 g.set_title(r'$R^2$ across 3 models on 1D data')
-plt.savefig('fig/1d_feats_comparison.png')
+plt.savefig('fig/1d_feats_comparison_wide.png')
 
 # <codecell>
 def plot_animation(model, save_path):
-    plot_idx = 4  # corresponds to the test index
+    plot_idx = len(data) - 1  # corresponds to the test index
 
     X_plot, y_plot = segment(data.mouse[plot_idx], data.trail[plot_idx], flatten=True)
     X_plot_sc = scalar_x.transform(X_plot)
@@ -131,10 +131,10 @@ def plot_animation(model, save_path):
         plt.xticks([])
         plt.yticks([])
 
-
-    ani = FuncAnimation(plt.gcf(), plot_frame, np.arange(240, 721), interval=330)
+    ani = FuncAnimation(plt.gcf(), plot_frame, np.arange(X_plot.shape[0]), interval=330)
     ani.save(save_path)
 
-plot_animation(cases[0].model, 'fig/linear_feats_traj.mp4')
-plot_animation(cases[1].model, 'fig/lasso_feats_traj.mp4')
-plot_animation(cases[2].model, 'fig/mlp_feats_traj.mp4')
+# TODO: visualize tracks more closely; set up tuning
+plot_animation(cases[0].model, 'fig/linear_feats_traj_wide.mp4')
+plot_animation(cases[1].model, 'fig/lasso_feats_traj_wide.mp4')
+plot_animation(cases[2].model, 'fig/mlp_feats_traj_wide.mp4')
